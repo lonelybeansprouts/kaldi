@@ -106,7 +106,7 @@ if [ $stage -le 5 ]; then
   steps/align_si.sh --cmd "$train_cmd" --nj $nj \
     data/train data/lang exp/tri3 exp/tri3_ali || exit 1;
   
-  steps/align_si.sh --cmd "$train_cmd" --nj ${nj} \
+  steps/align_si.sh --cmd "$train_cmd" --nj 1 \
     data/dev data/lang exp/tri3 exp/tri3_ali_dev || exit 1;
 fi
 

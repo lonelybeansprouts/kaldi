@@ -14,11 +14,13 @@
 # trn_set=/disk10/data/AISHELL-2/iOS/data
 # dev_set=/disk10/data/AISHELL-2/iOS/dev
 # tst_set=/disk10/data/AISHELL-2/iOS/test
-trn_set=
-dev_set=
-tst_set=
 
-nj=20
+trn_set=data/download/aishell2data/train
+dev_set=data/download/aishell2data/dev
+tst_set=data/download/aishell2data/test
+
+nj=32
+
 stage=1
 gmm_stage=1
 
@@ -36,9 +38,19 @@ if [ $stage -le 2 ]; then
   local/run_gmm.sh --nj $nj --stage $gmm_stage
 fi
 
-# chain
+exit 1
+
+# DNN
 if [ $stage -le 3 ]; then
-  local/chain/run_tdnn.sh --nj $nj
+  # local/nnet3/run_tdnn_small.sh --nj $nj --stage 0 --affix small --num_jobs_initial 2 --num_jobs_final 4 --num_epochs 6
+  local/nnet3/run_tdnn_tuned.sh --nj $nj --stage 0 --affix tuned --num_jobs_initial 2 --num_jobs_final 4 --num_epochs 6
+fi
+
+exit 1
+
+# chain
+if [ $stage -le 4 ]; then
+  local/chain/run_tdnn.sh --nj $njq
 fi
 
 local/show_results.sh

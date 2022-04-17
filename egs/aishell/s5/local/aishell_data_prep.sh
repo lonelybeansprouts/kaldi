@@ -5,7 +5,7 @@
 
 . ./path.sh || exit 1;
 
-if [ $# != 2 ]; then
+if [ $# != 3 ]; then
   echo "Usage: $0 <audio-path> <text-path>"
   echo " $0 /export/a05/xna/data/data_aishell/wav /export/a05/xna/data/data_aishell/transcript"
   exit 1;

@@ -85,15 +85,20 @@ if ! tar -xvzf $part.tgz; then
   exit 1;
 fi
 
-touch $data/$part/.complete
 
 if [ $part == "data_aishell" ]; then
-  cd $data/$part/wav
+  cd $part/wav
   for wav in ./*.tar.gz; do
     echo "Extracting wav from $wav"
     tar -zxf $wav && rm $wav
   done
+  cd ../..
 fi
+
+cd ..
+
+touch $data/$part/.complete
+
 
 echo "$0: Successfully downloaded and un-tarred $data/$part.tgz"
 

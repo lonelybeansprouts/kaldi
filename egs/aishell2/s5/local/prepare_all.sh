@@ -27,8 +27,9 @@ tst_set=$3
 
 # download DaCiDian raw resources, convert to Kaldi lexicon format
 if [ $stage -le 1 ]; then
-  local/prepare_dict.sh data/local/dict || exit 1;
+  local/prepare_dict_BigCiDian.sh data/local/dict || exit 1;
 fi
+
 
 # wav.scp, text(word-segmented), utt2spk, spk2utt
 if [ $stage -le 2 ]; then
@@ -37,11 +38,13 @@ if [ $stage -le 2 ]; then
   local/prepare_data.sh ${tst_set} data/local/dict data/local/test  data/test  || exit 1;
 fi
 
+
 # L
 if [ $stage -le 3 ]; then
   utils/prepare_lang.sh --position-dependent-phones false \
     data/local/dict "<UNK>" data/local/lang data/lang || exit 1;
 fi
+
 
 # arpa LM
 if [ $stage -le 4 ]; then

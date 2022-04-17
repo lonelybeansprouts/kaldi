@@ -137,6 +137,7 @@ def train_new_models(dir, iter, srand, num_jobs,
         # note: the thread waits on that process's completion.
         thread = common_lib.background_command(
             """{command} {train_queue_opt} {dir}/log/train.{iter}.{job}.log \
+                CUDA_VISIBLE_DEVICES={job_1} \
                     nnet3-train {parallel_train_opts} {cache_io_opts} \
                      {verbose_opt} --print-interval=10 \
                     --momentum={momentum} \
@@ -151,7 +152,7 @@ def train_new_models(dir, iter, srand, num_jobs,
                 train_queue_opt=run_opts.train_queue_opt,
                 dir=dir, iter=iter,
                 next_iter=iter + 1, srand=iter + srand,
-                job=job,
+                job=job, job_1=job-1,
                 parallel_train_opts=run_opts.parallel_train_opts,
                 cache_io_opts=cache_io_opts,
                 verbose_opt=verbose_opt,

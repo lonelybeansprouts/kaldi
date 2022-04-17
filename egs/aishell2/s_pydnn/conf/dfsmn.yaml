@@ -1,0 +1,14 @@
+data_conf:
+    data_path: "/tmp"
+
+model_type: "dfsmn"
+model_conf:
+    input_size: -1
+    hidden_dim: 512
+    proj_dim: 128
+    lo: 20
+    ro: 20
+    output_size: -1
+    skip: "res"
+    nlayer: 15
+    ndnn: 2

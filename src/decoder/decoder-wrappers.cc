@@ -381,6 +381,9 @@ bool DecodeUtteranceLatticeFaster(
   return true;
 }
 
+
+
+
 // Instantiate the template above for the two required FST types.
 template bool DecodeUtteranceLatticeIncremental(
     LatticeIncrementalDecoderTpl<fst::Fst<fst::StdArc> > &decoder,
@@ -441,6 +444,7 @@ template bool DecodeUtteranceLatticeFaster(
     CompactLatticeWriter *compact_lattice_writer,
     LatticeWriter *lattice_writer,
     double *like_ptr);
+
 
 
 // Takes care of output.  Returns true on success.
