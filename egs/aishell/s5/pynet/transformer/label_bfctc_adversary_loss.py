@@ -11,7 +11,7 @@ from bfctc_pytorch import BfCtcLoss
 from pynet.utils.common import IGNORE_ID
 
 
-class LabelBFCTCLoss(nn.Module):
+class LabelBfCtcAdversaryLoss(nn.Module):
     """Label-smoothing loss.
 
     In a standard CE loss, the label's data distribution is:
@@ -47,15 +47,17 @@ class LabelBFCTCLoss(nn.Module):
                  size: int,
                  padding_idx: int,
                  smoothing: float,
+                 adversary_weight: float,
                  normalize_length: bool = False,
                  input_size: int = -1):
         """Construct an LabelSmoothingLoss object."""
-        super(LabelBFCTCLoss, self).__init__()
+        super(LabelBfCtcAdversaryLoss, self).__init__()
         self.criterion = nn.KLDivLoss(reduction="none")
         self.padding_idx = padding_idx
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
         self.size = size
+        self.adversary_weight = adversary_weight
         self.normalize_length = normalize_length
         self.bfctc = BfCtcLoss(size_average=True)
         if input_size>0:
@@ -64,7 +66,12 @@ class LabelBFCTCLoss(nn.Module):
             self.output_layer = None
 
 
-    def forward(self, x: torch.Tensor, ctc_target: torch.Tensor, ctc_acts_lens: torch.Tensor, ctc_target_lens: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, 
+                ctc_target_p1: torch.Tensor, 
+                ctc_target_p2: torch.Tensor,
+                ctc_acts_lens: torch.Tensor, 
+                ctc_target_lens_p1: torch.Tensor,
+                ctc_target_lens_p2: torch.Tensor):
         """Compute loss between x and target.
 
         The model outputs and data labels tensors are flatten to
@@ -87,12 +94,21 @@ class LabelBFCTCLoss(nn.Module):
         ctc_acts = x
         ctc_acts = ctc_acts.transpose(0, 1) #transpose to (T, batch, feat_dim) and must be before softmax
         ctc_acts = ctc_acts.cpu().float()
-        ctc_target = torch.masked_select(ctc_target, ctc_target.ne(IGNORE_ID)).cpu().long()
         ctc_acts_lens = ctc_acts_lens.cpu().long()
-        ctc_target_lens = ctc_target_lens.cpu().long()
-        ctc_loss = self.bfctc(ctc_acts, ctc_target, ctc_acts_lens, ctc_target_lens)
-        
-        return ctc_loss
+
+
+        ctc_target_p1 = torch.masked_select(ctc_target_p1, ctc_target_p1.ne(IGNORE_ID)).cpu().long()
+        ctc_target_lens_p1 = ctc_target_lens_p1.cpu().long()
+
+        ctc_loss_p1 = self.bfctc(ctc_acts, ctc_target_p1, ctc_acts_lens, ctc_target_lens_p1)
+
+        ctc_target_p2 = torch.masked_select(ctc_target_p2, ctc_target_p2.ne(IGNORE_ID)).cpu().long()
+        ctc_target_lens_p2 = ctc_target_lens_p2.cpu().long()
+        ctc_loss_p2 = self.bfctc(ctc_acts, ctc_target_p2, ctc_acts_lens, ctc_target_lens_p2)
+
+
+
+        return ctc_loss_p1-self.adversary_weight*ctc_loss_p2, ctc_loss_p1, ctc_loss_p2
 
 
     def get_logits(self, x: torch.Tensor):

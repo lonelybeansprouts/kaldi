@@ -14,9 +14,10 @@ node_rank=0
 # The aishell dataset location, please change this to your own path
 # make sure of using absolute path. DO-NOT-USE relatvie path!
 
-export OMP_NUM_THREADS=8  #set to batch_size
+export OMP_NUM_THREADS=12  #set to batch_size
+export BFCTC_THREAD_NUM=12 #bfctc threads
 
-stage=5
+stage=0
 nj=32
 
 python_cmd="python3 -u"
@@ -31,11 +32,11 @@ dict_dir=data/local/dict
 ali_dir=exp/tri3_ali
 
 
-affix=transformer_pdf_bfctc_multiattention
+affix=transformer_pdf_bfctc_multiattention_adversary
 dir=exp/py_$affix
 mkdir -p $dir
 
-train_config=conf/pyconf/train_unified_transformer_random_bfctc_multiattention.yaml
+train_config=conf/pyconf/e2e_pdf_bfctc_multiattention_adversary.yaml
 token_table=$dir/dict/lang_char.txt
 data_type=raw
 
@@ -56,12 +57,10 @@ echo "affix ${affix} start"
 if [ $stage -le 1 ]; then
     # remove the space between the text labels for Mandarin dataset
     for x in ${train_set} ${dev_set} ${test_set}; do
-        cp data/${x}/text data/${x}/text.org
-        paste -d " " <(cat data/${x}/text.org | sed -r 's%\t% %g' | cut -d " " -f 1 ) \
-            <(cat data/${x}/text.org | sed -r 's%\t% %g' | cut -d " " -f 2- \
+        paste -d " " <(cat data/${x}/text | sed -r 's%\t% %g' | cut -d " " -f 1 ) \
+            <(cat data/${x}/text | sed -r 's%\t% %g' | cut -d " " -f 2- \
             | tr 'a-z' 'A-Z' | sed 's/\([A-Z]\) \([A-Z]\)/\1▁\2/g' | tr -d " ") \
-            > data/${x}/text
-        rm data/${x}/text.org
+            > data/${x}/text.tgt
     done
     pynet/tools/compute_cmvn_stats.py --num_workers ${nj} --train_config $train_config \
         --in_scp data/${train_set}/wav.scp \
@@ -73,7 +72,7 @@ if [ $stage -le 2 ]; then
     mkdir -p $(dirname $token_table)
     echo "<blank> 0" > ${token_table} # 0 will be used for "blank" in CTC
     echo "<unk> 1" >> ${token_table} # <unk> must be 1
-    pynet/tools/text2token.py -s 1 -n 1 data/${train_set}/text | cut -f 2- -d" " | tr " " "\n" \
+    pynet/tools/text2token.py -s 1 -n 1 data/${train_set}/text.tgt | cut -f 2- -d" " | tr " " "\n" \
         | sort | uniq | grep -a -v -e '^\s*$' | awk '{print $0 " " NR+1}' >> ${token_table}
     num_token=$(cat $token_table | wc -l)
     echo "<sos/eos> $num_token" >> $token_table # <eos>
@@ -86,10 +85,10 @@ if [ $stage -le 3 ]; then
     for x in ${train_set} ${dev_set}; do
         pynet/tools/make_raw_list.py --pdf_ali data/$x/pdfs.ali \
                                     --phone_ali data/$x/phones.ali \
-                                    data/$x/wav.scp data/$x/text data/$x/data.list
+                                    data/$x/wav.scp data/$x/text.tgt data/$x/data.list
     done
     for x in ${test_set}; do
-        pynet/tools/make_raw_list.py data/$x/wav.scp data/$x/text data/$x/data.list
+        pynet/tools/make_raw_list.py data/$x/wav.scp data/$x/text.tgt data/$x/data.list
     done
 fi
 
@@ -156,31 +155,30 @@ fi
 
 # decode for test
 if [ $stage -le 6 ]; then
-    for decode_checkpoint in $dir/*.pt; 
-    do
-        model_path=$decode_checkpoint
-        dataset=test
-        model_name=$( basename $model_path )
-        decode_dir=$dir/${model_name//./_}_${dataset}_decode
-        mkdir -p $decode_dir
-        python3 -u pynet/bin/dump_logp.py --gpu -1 \
-            --config $dir/train.yaml \
-            --data_type $data_type \
-            --symbol_table $token_table \
-            --test_data data/test/data.list \
-            --checkpoint $decode_checkpoint \
-            --prior_counts data/train/pdf.prior.counts \
-            --batch_size 1  |
-        latgen-faster-mapped-parallel  --acoustic-scale=0.1 \
-            --word-symbol-table=data/lang_test/words.txt \
-            --num-threads=${nj} \
-            ${gmm_model_dir}/final.mdl \
-            ${graph_dir}/HCLG.fst \
-            "ark:-" \
-            "ark:|gzip -c >${decode_dir}/lat.1.gz" 
-        steps/score_kaldi.sh data/test ${graph_dir} ${decode_dir}
-        steps/scoring/score_kaldi_cer.sh --stage 2 data/test ${graph_dir} ${decode_dir} 
-    done
+    model_path=$decode_checkpoint
+    dataset=test
+    model_name=$( basename $model_path )
+    decode_dir=$dir/${model_name//./_}_${dataset}_decode
+    mkdir -p $decode_dir
+    python3 -u pynet/bin/dump_logp.py --gpu -1 \
+        --config $dir/train.yaml \
+        --data_type $data_type \
+        --symbol_table $token_table \
+        --test_data data/test/data.list \
+        --checkpoint $decode_checkpoint \
+        --prior_counts data/train/pdf.prior.counts \
+        --unk_pdfs $gmm_model_dir/unk_pdfs.txt \
+        --unk_delta 15.0 \
+        --batch_size 1  |
+    latgen-faster-mapped-parallel  --acoustic-scale=0.1 \
+        --word-symbol-table=data/lang_test/words.txt \
+        --num-threads=${nj} \
+        ${gmm_model_dir}/final.mdl \
+        ${graph_dir}/HCLG.fst \
+        "ark:-" \
+        "ark:|gzip -c >${decode_dir}/lat.1.gz" 
+    steps/score_kaldi.sh data/test ${graph_dir} ${decode_dir}
+    steps/scoring/score_kaldi_cer.sh --stage 2 data/test ${graph_dir} ${decode_dir} 
 fi
 
 local/show_results.sh

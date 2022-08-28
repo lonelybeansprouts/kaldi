@@ -116,6 +116,7 @@ if [ $stage -le 6 ]; then
   num_targets=$(tree-info exp/tri3/tree |grep num-pdfs|awk '{print $2}')
   echo $num_targets > exp/tri3/pdf_num
   cat exp/tri3/phones.txt | grep -v "#" | wc -l > exp/tri3/phone_num
+  local-extract-pdfs-of-phone exp/tri3/final.mdl  `grep spn data/lang/phones.txt | awk '{print $2}'` | sort -u > exp/tri3/unk_pdfs.txt
 fi
 
 echo "local/run_gmm.sh succeeded"

@@ -605,9 +605,9 @@ def batch(data, batch_type='static', batch_size=16, max_frames_in_batch=12000):
 def rm_repeat(labels_list):
     return [x[0] for x in groupby(list(labels_list))]
 
-def random_repeat(labels_list):
+def proportion_repeat(labels_list, p=1.0):
     ret_list = []
-    p = uniform(0, 1)
+    # p = uniform(0, 1)
     for x in groupby(list(labels_list)):
         cur_label_list = list(x[1])
         num = int(p * len(cur_label_list))
@@ -615,7 +615,7 @@ def random_repeat(labels_list):
         ret_list.extend(cur_label_list[: num])
     return ret_list
 
-def padding(data):
+def padding(data, repeat_p1=0.7, repeat_p2=0):
     """ Padding the data into training data
 
         Args:
@@ -660,14 +660,23 @@ def padding(data):
             new_sample["pdf_ali_lengths"] = pdf_ali_lengths
 
 
-        sorted_pdf_ali_randlen = [
-            torch.tensor(random_repeat(sample[i]['pdf_ali']), dtype=torch.int32) for i in order if 'pdf_ali' in sample[i]
+        sorted_pdf_ali_repeat_p1 = [
+            torch.tensor(proportion_repeat(sample[i]['pdf_ali'], repeat_p1), dtype=torch.int32) for i in order if 'pdf_ali' in sample[i]
         ]
-        if len(sorted_pdf_ali_randlen) > 0:
-            sorted_pdf_ali_randlen_lengths = torch.tensor([x.size(0) for x in sorted_pdf_ali_randlen], dtype=torch.int32)
-            padding_pdf_ali_randlen=pad_sequence(sorted_pdf_ali_randlen, batch_first=True, padding_value=-1)
-            new_sample["pdf_ali_randlen"] = padding_pdf_ali_randlen
-            new_sample["pdf_ali_randlen_lengths"] = sorted_pdf_ali_randlen_lengths
+        if len(sorted_pdf_ali_repeat_p1) > 0:
+            sorted_pdf_ali_repeat_lengths_p1 = torch.tensor([x.size(0) for x in sorted_pdf_ali_repeat_p1], dtype=torch.int32)
+            padding_pdf_ali_randlen=pad_sequence(sorted_pdf_ali_repeat_p1, batch_first=True, padding_value=-1)
+            new_sample["pdf_ali_repeat_p1"] = padding_pdf_ali_randlen
+            new_sample["pdf_ali_repeat_lengths_p1"] = sorted_pdf_ali_repeat_lengths_p1
+
+        sorted_pdf_ali_repeat_p2 = [
+            torch.tensor(proportion_repeat(sample[i]['pdf_ali'], repeat_p2), dtype=torch.int32) for i in order if 'pdf_ali' in sample[i]
+        ]
+        if len(sorted_pdf_ali_repeat_p2) > 0:
+            sorted_pdf_ali_repeat_lengths_p2 = torch.tensor([x.size(0) for x in sorted_pdf_ali_repeat_p2], dtype=torch.int32)
+            padding_pdf_ali_randlen=pad_sequence(sorted_pdf_ali_repeat_p2, batch_first=True, padding_value=-1)
+            new_sample["pdf_ali_repeat_p2"] = padding_pdf_ali_randlen
+            new_sample["pdf_ali_repeat_lengths_p2"] = sorted_pdf_ali_repeat_lengths_p2
 
 
         #process none repeat pdf ali

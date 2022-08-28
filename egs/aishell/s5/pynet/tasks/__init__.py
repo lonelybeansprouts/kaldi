@@ -35,7 +35,7 @@ from pynet.utils.mask import (make_pad_mask, mask_finished_preds,
 
 from . import e2e_pdf_ce_multiattention
 from . import e2e_pdf_bfctc_multiattention
-from . import e2e_pdf_random_bfctc_multiattention
+from . import e2e_pdf_bfctc_multiattention_adversary
 
 
 def init_asr_model(configs):
@@ -44,8 +44,8 @@ def init_asr_model(configs):
         model = e2e_pdf_ce_multiattention.init_asr_model(configs)
     elif task_type == 'e2e_pdf_bfctc_multiattention':
         model = e2e_pdf_bfctc_multiattention.init_asr_model(configs)
-    elif task_type == 'e2e_pdf_random_bfctc_multiattention':
-        model = e2e_pdf_random_bfctc_multiattention.init_asr_model(configs)
+    elif task_type == 'e2e_pdf_bfctc_multiattention_adversary':
+        model = e2e_pdf_bfctc_multiattention_adversary.init_asr_model(configs)
     else:
         assert False, "not support task_type: " + task_type
     return model

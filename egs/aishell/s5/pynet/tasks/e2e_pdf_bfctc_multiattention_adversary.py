@@ -26,7 +26,7 @@ from pynet.transformer.decoder import (TransformerDecoder,
 from pynet.transformer.encoder import ConformerEncoder
 from pynet.transformer.encoder import TransformerEncoder
 from pynet.transformer.label_smoothing_loss import LabelSmoothingLoss
-from pynet.transformer.label_bfctc_loss import LabelBFCTCLoss
+from pynet.transformer.label_bfctc_adversary_loss import LabelBfCtcAdversaryLoss
 from pynet.utils.cmvn import load_cmvn
 from pynet.utils.common import (IGNORE_ID, add_sos_eos, log_add,
                                 remove_duplicates_and_blank, th_accuracy,
@@ -46,11 +46,11 @@ class ASRModel(torch.nn.Module):
         pdf_size: int,
         phone_size: int,
         vocab_size: int,
-        pdf_ce_weight: float,
         pdf_attention_weight: float,
         phone_attention_weight: float,
         vacab_attention_weight: float,
-        bfctc_weight: float,
+        pdf_bfctc_weight: float,
+        adversary_weight: float = 0.1,
         ignore_id: int = IGNORE_ID,
         lsm_weight: float = 0.0,
         length_normalized_loss: bool = False,
@@ -70,20 +70,19 @@ class ASRModel(torch.nn.Module):
         self.phone_decoder = phone_decoder
         self.vocab_decoder = vocab_decoder
 
-        self.pdf_ce_weight = pdf_ce_weight
+        self.pdf_bfctc_weight = pdf_bfctc_weight
         self.pdf_attention_weight = pdf_attention_weight
         self.phone_attention_weight = phone_attention_weight
         self.vacab_attention_weight = vacab_attention_weight
-        self.bfctc_weight = bfctc_weight
 
 
-        self.pdf_ce_ctc_loss = LabelBFCTCLoss(
+        self.pdf_bfctc_loss = LabelBfCtcAdversaryLoss(
             size=pdf_size,
             padding_idx=ignore_id,
             smoothing=lsm_weight,
+            adversary_weight=adversary_weight,
             normalize_length=length_normalized_loss,
             input_size = self.encoder.output_size(),
-            ctc_weight = self.bfctc_weight
         )
         self.pdf_attention_loss = LabelSmoothingLoss(
             size=pdf_size,
@@ -107,7 +106,8 @@ class ASRModel(torch.nn.Module):
     def unpack_train_data(self, batch_data, device):
         return batch_data['feats'].size(0), \
             (batch_data['feats'].to(device), batch_data['feats_lengths'].to(device), \
-            batch_data['pdf_ali_randlen'].to(device), batch_data['pdf_ali_randlen_lengths'].to(device), \
+            batch_data['pdf_ali_repeat_p1'].to(device), batch_data['pdf_ali_repeat_lengths_p1'].to(device), \
+            batch_data['pdf_ali_repeat_p2'].to(device), batch_data['pdf_ali_repeat_lengths_p2'].to(device), \
             batch_data['pdf_ali_none_repeat'].to(device), batch_data['pdf_ali_none_repeat_lengths'].to(device), \
             batch_data['phone_ali_none_repeat'].to(device), batch_data['phone_ali_none_repeat_lengths'].to(device), \
             batch_data['labels'].to(device), batch_data['label_lengths'].to(device))
@@ -119,8 +119,10 @@ class ASRModel(torch.nn.Module):
         self,
         speech: torch.Tensor,
         speech_lengths: torch.Tensor,
-        pdf_ali_randlen: torch.Tensor,
-        pdf_ali_randlen_lengths: torch.Tensor,
+        pdf_ali_repeat_p1: torch.Tensor,
+        pdf_ali_repeat_lengths_p1: torch.Tensor,
+        pdf_ali_repeat_p2: torch.Tensor,
+        pdf_ali_repeat_lengths_p2: torch.Tensor,
         pdf_ali_no_repeat: torch.Tensor,
         pdf_ali_no_repeat_lengths: torch.Tensor,
         phone_ali_no_repeat: torch.Tensor,
@@ -137,16 +139,19 @@ class ASRModel(torch.nn.Module):
         # Check that batch_size is unified
         assert (speech.shape[0] == speech_lengths.shape[0] == 
                 text.shape[0] == text_lengths.shape[0]==
-                pdf_ali_randlen.shape[0]==pdf_ali_randlen_lengths.shape[0]==
+                pdf_ali_repeat_p1.shape[0] == pdf_ali_repeat_lengths_p1.shape[0] ==
+                pdf_ali_repeat_p2.shape[0] == pdf_ali_repeat_lengths_p2.shape[0] ==
                 pdf_ali_no_repeat.shape[0]==pdf_ali_no_repeat_lengths.shape[0]==
                 phone_ali_no_repeat.shape[0]==phone_ali_no_repeat_lengths.shape[0]), (speech.shape, speech_lengths.shape,
-                text.shape, text_lengths.shape, pdf_ali_randlen.shape, pdf_ali_randlen_lengths.shape, pdf_ali_no_repeat.shape, pdf_ali_no_repeat_lengths.shape,
+                text.shape, text_lengths.shape, pdf_ali_no_repeat.shape, pdf_ali_no_repeat_lengths.shape,
                 phone_ali_no_repeat.shape, phone_ali_no_repeat_lengths.shape)
         
         assert (speech.dtype == torch.float32)
         assert (speech_lengths.dtype == torch.int32)
-        assert (pdf_ali_randlen.dtype == torch.int32)
-        assert (pdf_ali_randlen_lengths.dtype == torch.int32)
+        assert (pdf_ali_repeat_p1.dtype == torch.int32)
+        assert (pdf_ali_repeat_lengths_p1.dtype == torch.int32)
+        assert (pdf_ali_repeat_p2.dtype == torch.int32)
+        assert (pdf_ali_repeat_lengths_p2.dtype == torch.int32)
         assert (pdf_ali_no_repeat.dtype == torch.int32)
         assert (pdf_ali_no_repeat_lengths.dtype == torch.int32)
         assert (phone_ali_no_repeat.dtype == torch.int32)
@@ -158,7 +163,7 @@ class ASRModel(torch.nn.Module):
         encoder_out, encoder_mask = self.encoder(speech, speech_lengths)
         # encoder_out_lens = encoder_mask.squeeze(1).sum(1)
 
-        pdf_ce_loss_, pdf_bfctc_loss_ = self.pdf_ce_ctc_loss(encoder_out, None, pdf_ali_randlen, speech_lengths, pdf_ali_randlen_lengths) 
+        pdf_bfctc_loss_, pdf_bfctc_loss_p1_, pdf_bfctc_loss_p2_ = self.pdf_bfctc_loss(encoder_out, pdf_ali_repeat_p1, pdf_ali_repeat_p2, speech_lengths, pdf_ali_repeat_lengths_p1, pdf_ali_repeat_lengths_p2) 
 
         if self.pdf_attention_weight > 0.0:
             pdf_attention_loss_= self._calc_att_loss(self.pdf_decoder, self.pdf_attention_loss, encoder_out, encoder_mask, pdf_ali_no_repeat, pdf_ali_no_repeat_lengths, self.pdf_size-1, self.pdf_size-1)
@@ -175,9 +180,9 @@ class ASRModel(torch.nn.Module):
         else:
             vacab_attention_loss_ = torch.FloatTensor([0.0]).to(speech)
 
-        loss = self.pdf_ce_weight* (pdf_ce_loss_+pdf_bfctc_loss_)  +  self.pdf_attention_weight*pdf_attention_loss_ + self.phone_attention_weight*phone_attention_loss_ + self.vacab_attention_weight*vacab_attention_loss_
+        loss = self.pdf_bfctc_weight * (pdf_bfctc_loss_)  +  self.pdf_attention_weight*pdf_attention_loss_ + self.phone_attention_weight*phone_attention_loss_ + self.vacab_attention_weight*vacab_attention_loss_
         
-        return loss, dict(pdf_ce_loss=pdf_ce_loss_, pdf_bfctc_loss=pdf_bfctc_loss_, pdf_attention_loss=pdf_attention_loss_, phone_attention_loss=phone_attention_loss_, vacab_attention_loss=vacab_attention_loss_)
+        return loss, dict(pdf_bfctc_loss=pdf_bfctc_loss_, pdf_bfctc_loss_p1=pdf_bfctc_loss_p1_, pdf_bfctc_loss_p2=pdf_bfctc_loss_p2_, pdf_attention_loss=pdf_attention_loss_, phone_attention_loss=phone_attention_loss_, vacab_attention_loss=vacab_attention_loss_)
 
     def _calc_att_loss(
         self,
@@ -247,7 +252,7 @@ class ASRModel(torch.nn.Module):
             num_decoding_left_chunks,
             simulate_streaming)  # (B, maxlen, encoder_dim)
         
-        return self.pdf_ce_ctc_loss.get_logprobs(encoder_out)
+        return self.pdf_bfctc_loss.get_logprobs(encoder_out)
 
 
     def get_probs(
@@ -263,7 +268,7 @@ class ASRModel(torch.nn.Module):
             num_decoding_left_chunks,
             simulate_streaming)  # (B, maxlen, encoder_dim)
         
-        return self.pdf_ce_ctc_loss.get_probs(encoder_out)
+        return self.pdf_bfctc_loss.get_probs(encoder_out)
 
 
 def init_asr_model(configs):

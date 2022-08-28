@@ -16,7 +16,7 @@ node_rank=0
 
 export OMP_NUM_THREADS=8  #set to batch_size
 
-stage=6
+stage=4
 nj=32
 
 python_cmd="python3 -u"
@@ -42,7 +42,7 @@ data_type=raw
 checkpoint=
 average_checkpoint=true
 decode_checkpoint=$dir/final.pt
-average_num=30
+average_num=10
 
 
 echo "affix ${affix} start"
@@ -52,16 +52,13 @@ echo "affix ${affix} start"
 . ./path.sh
 . ./utils/parse_options.sh
 
-
 if [ $stage -le 1 ]; then
     # remove the space between the text labels for Mandarin dataset
     for x in ${train_set} ${dev_set} ${test_set}; do
-        cp data/${x}/text data/${x}/text.org
-        paste -d " " <(cat data/${x}/text.org | sed -r 's%\t% %g' | cut -d " " -f 1 ) \
-            <(cat data/${x}/text.org | sed -r 's%\t% %g' | cut -d " " -f 2- \
+        paste -d " " <(cat data/${x}/text | sed -r 's%\t% %g' | cut -d " " -f 1 ) \
+            <(cat data/${x}/text | sed -r 's%\t% %g' | cut -d " " -f 2- \
             | tr 'a-z' 'A-Z' | sed 's/\([A-Z]\) \([A-Z]\)/\1▁\2/g' | tr -d " ") \
-            > data/${x}/text
-        rm data/${x}/text.org
+            > data/${x}/text.tgt
     done
     pynet/tools/compute_cmvn_stats.py --num_workers ${nj} --train_config $train_config \
         --in_scp data/${train_set}/wav.scp \
@@ -73,7 +70,7 @@ if [ $stage -le 2 ]; then
     mkdir -p $(dirname $token_table)
     echo "<blank> 0" > ${token_table} # 0 will be used for "blank" in CTC
     echo "<unk> 1" >> ${token_table} # <unk> must be 1
-    pynet/tools/text2token.py -s 1 -n 1 data/${train_set}/text | cut -f 2- -d" " | tr " " "\n" \
+    pynet/tools/text2token.py -s 1 -n 1 data/${train_set}/text.tgt | cut -f 2- -d" " | tr " " "\n" \
         | sort | uniq | grep -a -v -e '^\s*$' | awk '{print $0 " " NR+1}' >> ${token_table}
     num_token=$(cat $token_table | wc -l)
     echo "<sos/eos> $num_token" >> $token_table # <eos>
@@ -86,10 +83,10 @@ if [ $stage -le 3 ]; then
     for x in ${train_set} ${dev_set}; do
         pynet/tools/make_raw_list.py --pdf_ali data/$x/pdfs.ali \
                                     --phone_ali data/$x/phones.ali \
-                                    data/$x/wav.scp data/$x/text data/$x/data.list
+                                    data/$x/wav.scp data/$x/text.tgt data/$x/data.list
     done
     for x in ${test_set}; do
-        pynet/tools/make_raw_list.py data/$x/wav.scp data/$x/text data/$x/data.list
+        pynet/tools/make_raw_list.py data/$x/wav.scp data/$x/text.tgt data/$x/data.list
     done
 fi
 
@@ -133,12 +130,12 @@ if [[ $stage -le 4 ]]; then
       --ddp.rank $rank \
       --ddp.dist_backend $dist_backend \
       --num_workers 1 \
-      $cmvn_opts \
-      --pin_memory
+      $cmvn_opts 
   } &
   done
   wait
 fi
+
 
 if [[ $stage -le 5 ]]; then
   # Test model, please specify the model you want to test by --checkpoint
@@ -156,7 +153,6 @@ fi
 
 # decode for test
 if [ $stage -le 6 ]; then
-    decode_checkpoint=$dir/120.pt
     model_path=$decode_checkpoint
     dataset=test
     model_name=$( basename $model_path )
@@ -169,7 +165,8 @@ if [ $stage -le 6 ]; then
         --test_data data/test/data.list \
         --checkpoint $decode_checkpoint \
         --prior_counts data/train/pdf.prior.counts \
-        --prior_scale 1.0 \
+        --unk_pdfs $gmm_model_dir/unk_pdfs.txt \
+        --unk_delta 15.0 \
         --batch_size 1  |
     latgen-faster-mapped-parallel  --acoustic-scale=0.1 \
         --word-symbol-table=data/lang_test/words.txt \

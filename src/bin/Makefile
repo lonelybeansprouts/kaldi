@@ -23,7 +23,8 @@ BINFILES = align-equal align-equal-compiled acc-tree-stats \
         vector-sum matrix-sum-rows est-pca sum-lda-accs sum-mllt-accs \
         transform-vec align-text matrix-dim post-to-smat compile-graph \
         compare-int-vector latgen-incremental-mapped \
-        compute-gop compile-train-graphs-without-lexicon local-fast-word-align local-fast-kaldi-align
+        compute-gop compile-train-graphs-without-lexicon local-fast-word-align local-fast-kaldi-align \
+        local-extract-pdfs-of-phone
 
 OBJFILES =
 

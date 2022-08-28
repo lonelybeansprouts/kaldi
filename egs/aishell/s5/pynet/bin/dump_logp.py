@@ -42,6 +42,18 @@ def load_prior(path):
         prior = prior / prior.sum()
         return prior.log()
 
+def load_pdfs(path):
+    if len(path)<=0:
+        return None
+    with open(path) as f:
+        lines = f.readlines()
+        pdfs = [ int(x) for x in lines]
+        return pdfs
+
+def unk_prior_penalty(log_prior, unk_pdfs, delta):
+    for pdf_id in unk_pdfs:
+        log_prior[pdf_id] += delta
+    return log_prior
 
 
 def get_args():
@@ -63,6 +75,12 @@ def get_args():
     parser.add_argument('--prior_scale',
                         type=float,
                         default=1.0)
+    parser.add_argument('--unk_pdfs',
+                        type=str,
+                        default='')
+    parser.add_argument('--unk_delta',
+                        type=float,
+                        default=0.0)
     parser.add_argument('--symbol_table',
                         required=True,
                         help='model unit symbol table for training')
@@ -185,6 +203,10 @@ def main():
     model = model.to(device)
     model.eval()
     output_file=sys.stdout.buffer
+
+    if args.unk_pdfs:
+        pdfs = load_pdfs(args.unk_pdfs)
+        log_prior = unk_prior_penalty(log_prior, pdfs, args.unk_delta)
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(test_data_loader):

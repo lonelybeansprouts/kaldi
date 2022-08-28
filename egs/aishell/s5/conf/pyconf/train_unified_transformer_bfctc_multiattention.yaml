@@ -27,11 +27,10 @@ decoder_conf:
 
 # hybrid CTC/attention
 model_conf:
-    pdf_ce_weight: 1.0
     pdf_attention_weight: 0.0
     phone_attention_weight: 0.0
     vacab_attention_weight: 0.0
-    bfctc_weight: 1.0
+    pdf_bfctc_weight: 1.0
     lsm_weight: 0.0     # label smoothing option
     length_normalized_loss: false
 
@@ -57,13 +56,13 @@ dataset_conf:
         token_min_length: 1
     resample_conf:
         resample_rate: 16000
-    speed_perturb: false
+    speed_perturb: true
     fbank_conf:
         num_mel_bins: 80
         frame_shift: 10
         frame_length: 25
         dither: 0.1
-    spec_aug: false
+    spec_aug: true
     spec_aug_conf:
         num_t_mask: 2
         num_f_mask: 2
@@ -76,8 +75,9 @@ dataset_conf:
     sort_conf:
         sort_size: 500  # sort_size should be less than shuffle_size
     batch_conf:
-        batch_type: 'static' # static or dynamic
-        batch_size: 8
+        batch_type: 'dynamic' # static or dynamic
+        batch_size: 20
+        max_frames_in_batch: 12000
 
 grad_clip: 5
 accum_grad: 1
