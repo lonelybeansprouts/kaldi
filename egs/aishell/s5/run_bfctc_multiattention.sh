@@ -15,6 +15,8 @@ node_rank=0
 # make sure of using absolute path. DO-NOT-USE relatvie path!
 
 export OMP_NUM_THREADS=8  #set to batch_size
+export BFCTC_THREAD_NUM=12 #bfctc threads
+
 
 stage=4
 nj=32
