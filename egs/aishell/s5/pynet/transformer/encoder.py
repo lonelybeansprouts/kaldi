@@ -18,6 +18,7 @@ from pynet.transformer.embedding import NoPositionalEncoding
 from pynet.transformer.encoder_layer import TransformerEncoderLayer
 from pynet.transformer.encoder_layer import ConformerEncoderLayer
 from pynet.transformer.positionwise_feed_forward import PositionwiseFeedForward
+from pynet.transformer.subsampling import Conv2dSubsampling3
 from pynet.transformer.subsampling import Conv2dSubsampling4
 from pynet.transformer.subsampling import Conv2dSubsampling6
 from pynet.transformer.subsampling import Conv2dSubsampling8
@@ -94,7 +95,9 @@ class BaseEncoder(torch.nn.Module):
 
         if input_layer == "linear":
             subsampling_class = LinearNoSubsampling
-        elif input_layer == "conv2d":
+        elif input_layer == "conv2d3":
+            subsampling_class = Conv2dSubsampling3
+        elif input_layer == "conv2d4":
             subsampling_class = Conv2dSubsampling4
         elif input_layer == "conv2d6":
             subsampling_class = Conv2dSubsampling6

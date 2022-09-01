@@ -66,6 +66,60 @@ class LinearNoSubsampling(BaseSubsampling):
         return x, pos_emb, x_mask
 
 
+
+
+class Conv2dSubsampling3(BaseSubsampling):
+    """Convolutional 2D subsampling (to 1/3 length).
+    Args:
+        idim (int): Input dimension.
+        odim (int): Output dimension.
+        dropout_rate (float): Dropout rate.
+        pos_enc (torch.nn.Module): Custom position encoding layer.
+    """
+    def __init__(self, idim: int, odim: int, dropout_rate: float,
+                 pos_enc_class: torch.nn.Module):
+        """Construct an Conv2dSubsampling6 object."""
+        super().__init__()
+        self.conv = torch.nn.Sequential(
+            torch.nn.Conv2d(1, odim, 5, 3),
+            torch.nn.ReLU(),
+        )
+        self.linear = torch.nn.Linear(odim * ((idim - 2) // 3),
+                                      odim)
+        self.pos_enc = pos_enc_class
+        # The right context for every conv layer is computed by:
+        # (kernel_size - 1) * frame_rate_of_this_layer
+        # 4 = (5 - 1) * 1
+        self.subsampling_rate = 3
+        self.right_context = 4
+
+    def forward(
+            self,
+            x: torch.Tensor,
+            x_mask: torch.Tensor,
+            offset: int = 0
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Subsample x.
+        Args:
+            x (torch.Tensor): Input tensor (#batch, time, idim).
+            x_mask (torch.Tensor): Input mask (#batch, 1, time).
+
+        Returns:
+            torch.Tensor: Subsampled tensor (#batch, time', odim),
+                where time' = time // 3.
+            torch.Tensor: Subsampled mask (#batch, 1, time'),
+                where time' = time // 3.
+            torch.Tensor: positional encoding
+        """
+        x = x.unsqueeze(1)  # (b, c, t, f)
+        x = self.conv(x)
+        b, c, t, f = x.size()
+        x = self.linear(x.transpose(1, 2).contiguous().view(b, t, c * f))
+        x, pos_emb = self.pos_enc(x, offset)
+        return x, pos_emb, x_mask[:, :, :-4:3]
+
+
+
 class Conv2dSubsampling4(BaseSubsampling):
     """Convolutional 2D subsampling (to 1/4 length).
 
