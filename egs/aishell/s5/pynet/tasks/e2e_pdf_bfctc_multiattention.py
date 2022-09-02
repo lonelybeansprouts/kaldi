@@ -149,9 +149,6 @@ class ASRModel(torch.nn.Module):
         encoder_out, encoder_mask = self.encoder(speech, speech_lengths)
         encoder_out_lens = encoder_mask.squeeze(1).sum(1).int()
 
-        print(encoder_out_lens)
-        print(pdf_ali_no_repeat_lengths)
-
         pdf_bfctc_loss_ = self.pdf_bfctc_loss(encoder_out, pdf_ali_no_repeat, encoder_out_lens, pdf_ali_no_repeat_lengths) 
 
         if self.pdf_attention_weight > 0.0:
