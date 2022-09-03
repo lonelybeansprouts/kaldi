@@ -17,7 +17,7 @@ node_rank=0
 export OMP_NUM_THREADS=12  #set to batch_size
 export BFCTC_THREAD_NUM=12 #bfctc threads
 
-stage=0
+stage=5
 nj=32
 
 python_cmd="python3 -u"
@@ -43,7 +43,7 @@ data_type=raw
 checkpoint=
 average_checkpoint=true
 decode_checkpoint=$dir/final.pt
-average_num=10
+average_num=20
 
 
 echo "affix ${affix} start"
