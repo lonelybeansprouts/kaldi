@@ -19,7 +19,7 @@ dir=$1
 
 # download the DaCiDian from github
 if [ ! -d $download_dir ]; then
-  git clone https://github.com/speechio/BigCiDian.git $download_dir
+  git clone https://github.com/speechio/BigCiDian.git $download_dir || exit 1
 fi
 
 # here we map <UNK> to the phone spn(spoken noise)
