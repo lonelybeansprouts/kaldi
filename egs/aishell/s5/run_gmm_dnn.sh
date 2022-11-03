@@ -19,7 +19,7 @@ download_data=download_data
 
 nj=32
 
-stage=0
+stage=3
 gmm_stage=0
 
 . ./cmd.sh
@@ -36,13 +36,13 @@ if [ $stage -le 2 ]; then
   local/run_gmm.sh --nj $nj --stage $gmm_stage
 fi
 
-exit 1
 
 # DNN
 if [ $stage -le 3 ]; then
-  # local/nnet3/run_tdnn_small.sh --nj $nj --stage 0 --affix small --num_jobs_initial 2 --num_jobs_final 4 --num_epochs 6
-  local/nnet3/run_tdnn_tuned.sh --nj $nj --stage 0 --affix tuned --num_jobs_initial 2 --num_jobs_final 4 --num_epochs 6
+  local/nnet3/run_tdnn_small.sh --nj $nj --stage 0 --affix small --num_jobs_initial 1 --num_jobs_final 1 --num_epochs 6
 fi
+exit 1
+
 
 # chain
 if [ $stage -le 4 ]; then
